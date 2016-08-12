@@ -42,7 +42,7 @@ def checkIfPromulgated(charmId):
     logger.debug("fetching promulgated info for %s", url)
     response = requests.get(url)
     if response.status_code != 200:
-        logging.error('promulgated info for %s failed', url)
+        logger.error('promulgated info for %s failed', url)
         return False
 
     data = json.loads(response.content)
@@ -151,7 +151,7 @@ def fetchChanges(date):
     logger.debug('fetching changes from %s', url)
     response = requests.get(url)
     if response.status_code != 200:
-        logging.error('changes info at %s failed', url)
+        logger.error('changes info at %s failed', url)
         return None
     return json.loads(response.content)
 
