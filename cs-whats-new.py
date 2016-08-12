@@ -5,9 +5,21 @@ import json
 import requests
 import logging
 import sys
+import datetime
+import os
 
 CHARMSTORE_URL = 'https://api.jujucharms.com/charmstore/v5'
 CHANGES_URL = '/changes/published?'
+
+logging.basicConfig(filename='cs-whats-new.log', level=logging.DEBUG)
+logger = logging.getLogger("whats-new")
+
+# create the logging file handler
+fh = logging.FileHandler("cs-whats-new.log")
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+fh.setFormatter(formatter)
+# add handler to logger object
+logger.addHandler(fh)
 
 def getCharmRevisionFromId(charmId):
     """ Parses the charm ID string and returns the revision if there is one.
@@ -27,11 +39,10 @@ def checkIfPromulgated(charmId):
     charm is promulgated or not.
     """
     url = CHARMSTORE_URL + '/' + charmId + '/meta/promulgated'
-    # logging.debug("fetching promulgated info for {}", url)
-    print "fetching data from ", url
+    logger.debug("fetching promulgated info for %s", url)
     response = requests.get(url)
     if response.status_code != 200:
-        logging.debug('promulgated info for {} failed', url)
+        logging.error('promulgated info for %s failed', url)
         return False
 
     data = json.loads(response.content)
@@ -51,8 +62,7 @@ def getCharmInfo(changesData):
         info['revision'] = getCharmRevisionFromId(charmId)
         info['promulgated'] = checkIfPromulgated(charmId)
         charms[charmId] = info
-    # logging.debug('all content {}', charms)
-    print charms
+    logger.debug('all content %s', charms)
     return charms
 
 
@@ -64,7 +74,7 @@ def filterNew(charms, promulgated=True):
         info = charms[charm]
         if (info['revision'] == 0) and (info['promulgated'] == promulgated):
             filtered.append(charm)
-    print filtered
+    logger.debug('filtered new: %s', filtered)
     return filtered
 
 
@@ -88,7 +98,7 @@ def filterUpdatedRevisions(charms, promulgated=True):
         info = charms[charm]
         if (info['revision'] != 0) and (info['promulgated'] == promulgated):
             filtered.append(charm)
-    print filtered
+    logger.debug('filtered updated: %s', filtered)
     return filtered
 
 
@@ -132,25 +142,23 @@ def generateHtml(newPromulgated, newCommunity, updatedPromulgated,
     str += '</html>'
     return str
 
-
 def fetchChanges(date):
-	""" Fetches the data about changes from charm store. Example of the
-	url:
-	https://api.jujucharms.com/charmstore/v5/changes/published?start=2016-08-05&stop=2016-08-05
-	"""
-	url = CHARMSTORE_URL + CHANGES_URL + 'start=' + date + '&stop=' + date
-	print 'fetching changes from ', url
-	response = requests.get(url)
-	if response.status_code != 200:
-		logging.debug('changes info at {} failed', url)
-		return None
-	return json.loads(response.content)
+    """ Fetches the data about changes from charm store. Example of the
+    url:
+    https://api.jujucharms.com/charmstore/v5/changes/published?start=2016-08-05&stop=2016-08-05
+    """
+    url = CHARMSTORE_URL + CHANGES_URL + 'start=' + date + '&stop=' + date
+    logger.debug('fetching changes from %s', url)
+    response = requests.get(url)
+    if response.status_code != 200:
+        logging.error('changes info at %s failed', url)
+        return None
+    return json.loads(response.content)
 
 def main():
-    logging.basicConfig(filename='cs-whats-new.log', level=logging.DEBUG)
     logging.info('Started')
-
-    changesData = fetchChanges(sys.argv[1])
+    time = datetime.date.today().strftime("%Y-%m-%d")
+    changesData = fetchChanges(time)
     info = getCharmInfo(changesData)
     newPromulgated = getNewPromulgated(info)
     newCommunity = getNewCommunity(info)
@@ -158,10 +166,15 @@ def main():
     updatedCommunity = getUpdatedCommunity(info)
 
     html = generateHtml(newPromulgated, newCommunity, updatedPromulgated,
-                 updatedCommunity, sys.argv[1])
-    f = open(sys.argv[2] + '-' + sys.argv[1] + '.html', 'w')
+                 updatedCommunity, time)
+    name = sys.argv[1] + '-' + time + '.html'
+    f = open(name, 'w')
     f.write(html)
     f.close()
+    logging.info("content written to %s", name)
+    os.system('rm new.html')
+    cmd = 'ln -s ' + name + ' new.html'
+    os.system(cmd)
 
     logging.info('Finished')
 
